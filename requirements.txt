@@ -1,0 +1,4 @@
+backports.functools-lru-cache==1.2.1
+basil-common==0.1.0.dev
+basil-calculib==0.1.0.dev
+eveapi
