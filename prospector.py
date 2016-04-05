@@ -10,7 +10,7 @@ import eveapi
 import requests
 
 from basil_common.configurables import verify
-from basil.market.prospect import prospect
+from basil.market.prospect import prospect as prospects
 from basil.industry import IndustryException
 
 
@@ -71,7 +71,7 @@ def evaluate_product(refapi, facilities, product):
             recipe = refapi('recipes/manufacturing/%s' % bp.typeID)
             blueprint = blueprint_from(bp, recipe)
             try:
-                this_prospect = prospect(blueprint, facilities, 1, copies)
+                this_prospect = prospects(blueprint, facilities, 1, copies)
             except IndustryException:
                 return None
             if this_prospect[0].profit_margin > 5.0:
