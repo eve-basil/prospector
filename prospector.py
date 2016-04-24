@@ -50,14 +50,14 @@ def blueprint_from(bp, recipe):
 
 
 def evaluate_prospects(refapi, facilities, print_keys, print_groups):
-    prospects = []
+    best_prospects = []
     for key in set(print_keys):
         product = print_groups[key]
         result = evaluate_product(refapi, facilities, product)
         if not result:
             continue
-        prospects.append(result)
-    return prospects
+        best_prospects.append(result)
+    return best_prospects
 
 
 def evaluate_product(refapi, facilities, product):
@@ -68,7 +68,11 @@ def evaluate_product(refapi, facilities, product):
         if me_value > 3:
             copies = len(copies_by_me[me_value])
             bp = copies_by_me[me_value][0]
-            recipe = refapi('recipes/manufacturing/%s' % bp.typeID)
+            try:
+                recipe = refapi('recipes/manufacturing/%s' % bp.typeID)
+            except ValueError:
+                LOG.warning('ValueError manufacturing bp %s', bp.typeID)
+                continue
             blueprint = blueprint_from(bp, recipe)
             try:
                 this_prospect = prospects(blueprint, facilities, 1, copies)
@@ -81,12 +85,8 @@ def evaluate_product(refapi, facilities, product):
                 break
 
 
-def link_refapi(base_url):
-    headers = {'user-agent': 'github.com/eve-basil/printer[0.1.0-dev]'}
-    session = requests.Session()
-    session.headers.update(headers)
-
-    @lru_cache(maxsize=24)
+def link_refapi(base_url, session):
+    @lru_cache(maxsize=32)
     def refapi(url_path, **kwargs):
         url = base_url + url_path
         return session.get(url, **kwargs).json()
@@ -96,23 +96,9 @@ def link_refapi(base_url):
 
 def filter_by_quality(output):
     passing = [i[0] for i in output if len(i) > 0 and
-               i[0].profit_per_run > 30000]
-    passing.sort(key=lambda prosp: prosp.profit_per_run)
+               i[0].profit_per_run > 45000]
+    passing.sort(key=lambda prosp: prosp.profit_per_unit, reverse=True)
     return passing
-
-
-def main():
-    verify(REQUIRED_OPS)
-
-    auth = authorized_api()
-    prints_keys, prints_groups = grouped_prints(auth)
-    evaluation = evaluate_prospects(link_refapi(os.environ['REFAPI_URL']),
-                                    lookup_facilities(), prints_keys,
-                                    prints_groups)
-    options = as_json(filter_by_quality(evaluation))
-    import json
-    print "options: %s" % len(options)
-    print json.dumps(options, indent=2)
 
 
 def authorized_api():
@@ -122,18 +108,24 @@ def authorized_api():
     return auth
 
 
-def as_json(results):
+def as_dict(results):
+    import locale
+    locale.setlocale( locale.LC_ALL, '' )
+
+
     options = []
     for prospect in results:
         opt = {'product': prospect.product,
                'copies': prospect.count,
                'location': prospect.facility.name.split(' ', 1),
                'blueprint_me': prospect.blueprint_me,
-               'price': prospect.price_per_unit,
-               'cost': prospect.cost_per_unit,
-               'profit': prospect.profit_per_unit,
-               'margin': prospect.profit_margin,
-               'install': prospect.install_cost,
+               'isk_per_hour': locale.currency(prospect.isk_per_hour),
+               'price': locale.currency(prospect.price_per_unit),
+               'cost': locale.currency(prospect.cost_per_unit),
+               'value': locale.currency(prospect.product_value),
+               'profit': locale.currency(prospect.profit_per_unit),
+               'margin': "{0:.2f}%".format(prospect.profit_margin),
+               'install': locale.currency(prospect.install_cost),
                'materials': prospect.materials.as_dict()}
         options.append(opt)
 
@@ -144,6 +136,42 @@ def lookup_facilities():
     from basil.industry.facility import facility
     stations = os.environ['STATION_IDS'].split(',')
     return [facility(fac_id) for fac_id in stations]
+
+
+def main():
+    verify(REQUIRED_OPS)
+
+    auth = authorized_api()
+
+    headers = {'user-agent': 'github/eve-basil/prospector/0.1.0-dev'}
+    session = requests.Session()
+    session.headers.update(headers)
+
+    import basil.market
+    basil.market.SESSION = session
+
+    import distutils
+    use_char_key = distutils.util.strtobool(
+        os.environ.get('USE_CHAR_KEY', False))
+
+    prints_keys, prints_groups = grouped_prints(auth, use_char_key)
+    refapi = link_refapi(os.environ['REFAPI_URL'], session)
+    evaluation = evaluate_prospects(refapi, lookup_facilities(), prints_keys,
+                                    prints_groups)
+    best_prospects = as_dict(filter_by_quality(evaluation))
+
+    fields = ['product', 'profit', 'price', 'cost', 'margin']
+    import csv
+    prospects_file = os.environ.get('OUTPUT_PATH', 'prospects.csv')
+    with open(prospects_file, 'w') as outfile:
+        writer = csv.DictWriter(outfile, fieldnames=fields,
+                                extrasaction='ignore')
+
+        writer.writeheader()
+        writer.writerows(best_prospects)
+
+    # import json
+    # print json.dumps(best_prospects, indent=2)
 
 
 if __name__ == "__main__":
