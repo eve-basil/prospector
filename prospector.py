@@ -74,6 +74,9 @@ def evaluate_product(refapi, facilities, product):
                 LOG.warning('ValueError manufacturing bp %s', bp.typeID)
                 continue
             blueprint = blueprint_from(bp, recipe)
+            # skip Storyline items
+            if "' " in blueprint['typeName']:
+                continue
             try:
                 this_prospect = prospects(blueprint, facilities, 1, copies)
             except IndustryException:
