@@ -13,7 +13,6 @@ from basil_common.configurables import verify
 from basil.market.prospect import prospect as prospects
 from basil.industry import IndustryException
 
-
 LOG = logging.getLogger(__name__)
 logging.getLogger('requests').level = logging.WARNING
 
@@ -113,8 +112,7 @@ def authorized_api():
 
 def as_dict(results):
     import locale
-    locale.setlocale( locale.LC_ALL, '' )
-
+    locale.setlocale(locale.LC_ALL, '')
 
     options = []
     for prospect in results:
@@ -173,8 +171,8 @@ def main():
         writer.writeheader()
         writer.writerows(best_prospects)
 
-    # import json
-    # print json.dumps(best_prospects, indent=2)
+        # import json
+        # print json.dumps(best_prospects, indent=2)
 
 
 if __name__ == "__main__":
