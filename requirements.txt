@@ -2,3 +2,4 @@ backports.functools-lru-cache==1.2.1
 eveapi
 git+https://github.com/eve-basil/common.git
 git+https://github.com/eve-basil/calculib.git
+requests==2.9.1
